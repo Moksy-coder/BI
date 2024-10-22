@@ -1,23 +1,24 @@
+/*
 package com.moksy.springbootinit.job.cycle;
 
-import com.moksy.springbootinit.esdao.PostEsDao;
+
 import com.moksy.springbootinit.mapper.PostMapper;
-import com.moksy.springbootinit.model.dto.post.PostEsDTO;
 import com.moksy.springbootinit.model.entity.Post;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import cn.hutool.core.collection.CollUtil;
 import org.springframework.scheduling.annotation.Scheduled;
 
+*/
 /**
  * 增量同步帖子到 es
- *
+
  * 
- * 
- */
+ *//*
+
 // todo 取消注释开启任务
 //@Component
 @Slf4j
@@ -29,9 +30,11 @@ public class IncSyncPostToEs {
     @Resource
     private PostEsDao postEsDao;
 
-    /**
+    */
+/**
      * 每分钟执行一次
-     */
+     *//*
+
     @Scheduled(fixedRate = 60 * 1000)
     public void run() {
         // 查询近 5 分钟内的数据
@@ -55,3 +58,4 @@ public class IncSyncPostToEs {
         log.info("IncSyncPostToEs end, total {}", total);
     }
 }
+*/

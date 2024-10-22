@@ -13,7 +13,7 @@ import com.moksy.springbootinit.model.entity.PostFavour;
 import com.moksy.springbootinit.model.entity.User;
 import com.moksy.springbootinit.service.PostFavourService;
 import com.moksy.springbootinit.service.PostService;
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

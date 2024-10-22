@@ -1,7 +1,5 @@
 package com.moksy.springbootinit.controller;
 
-import cn.hutool.core.collection.CollUtil;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.moksy.springbootinit.annotation.AuthCheck;
@@ -13,15 +11,14 @@ import com.moksy.springbootinit.constant.CommonConstant;
 import com.moksy.springbootinit.constant.UserConstant;
 import com.moksy.springbootinit.exception.BusinessException;
 import com.moksy.springbootinit.exception.ThrowUtils;
-import com.moksy.springbootinit.model.dto.chart.ChartAddRequest;
-import com.moksy.springbootinit.model.dto.chart.ChartEditRequest;
-import com.moksy.springbootinit.model.dto.chart.ChartQueryRequest;
-import com.moksy.springbootinit.model.dto.chart.ChartUpdateRequest;
+import com.moksy.springbootinit.manager.AiManager;
+import com.moksy.springbootinit.model.dto.chart.*;
 import com.moksy.springbootinit.model.entity.Chart;
-import com.moksy.springbootinit.model.entity.Post;
 import com.moksy.springbootinit.model.entity.User;
+import com.moksy.springbootinit.model.vo.BiResponse;
 import com.moksy.springbootinit.service.ChartService;
 import com.moksy.springbootinit.service.UserService;
+import com.moksy.springbootinit.utils.ExcelUtils;
 import com.moksy.springbootinit.utils.SqlUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
@@ -29,15 +26,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
-import java.util.List;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 图表接口
- *
- * 
- * 
  */
 @RestController
 @RequestMapping("/chart")
@@ -49,6 +43,9 @@ public class ChartController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private AiManager aiManager;
 
     // region 增删改查
 
@@ -121,6 +118,90 @@ public class ChartController {
         return ResultUtils.success(result);
     }
 
+
+    /**
+     * 智能分析
+     *
+     * @param multipartFile
+     * @param genChartByBiFileRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen")
+// 把返回值改成BiResponse
+    public BaseResponse<BiResponse> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
+                                                GenChartByBiFileRequest genChartByBiFileRequest, HttpServletRequest request) {
+        String name = genChartByBiFileRequest.getName();
+        String goal = genChartByBiFileRequest.getGoal();
+        String chartType = genChartByBiFileRequest.getChartType();
+        // 校验
+        // 如果分析目标为空，就抛出请求参数错误异常，并给出提示
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        // 如果名称不为空，并且名称长度大于100，就抛出异常，并给出提示
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+        // 通过response对象拿到用户id(必须登录才能使用)
+        User loginUser = userService.getLoginUser(request);
+
+        // 指定一个模型id(把id写死，也可以定义成一个常量)
+        long biModelId = 1659171950288818178L;
+    /*
+    * 用户的输入(参考)
+      分析需求：
+      分析网站用户的增长情况
+      原始数据：
+      日期,用户数
+      1号,10
+      2号,20
+      3号,30
+    * */
+        // 构造用户输入
+        StringBuilder userInput = new StringBuilder();
+        userInput.append("分析需求：").append("\n");
+
+        // 拼接分析目标
+        String userGoal = goal;
+        // 如果图表类型不为空
+        if (StringUtils.isNotBlank(chartType)) {
+            // 就将分析目标拼接上“请使用”+图表类型
+            userGoal += "，请使用" + chartType;
+        }
+        userInput.append(userGoal).append("\n");
+        userInput.append("原始数据：").append("\n");
+        // 压缩后的数据（把multipartFile传进来）
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
+        userInput.append(csvData).append("\n");
+
+        // 拿到返回结果
+        String result = aiManager.doChat(biModelId,userInput.toString());
+        // 对返回结果做拆分,按照5个中括号进行拆分
+        String[] splits = result.split("【【【【【");
+        // 拆分之后还要进行校验
+        if (splits.length < 3) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"AI 生成错误");
+        }
+        String genChart = splits[1].trim();
+        String genResult = splits[2].trim();
+        // 插入到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setGenChart(genChart);
+        chart.setGenResult(genResult);
+        chart.setUserId(loginUser.getId());
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+        BiResponse biResponse = new BiResponse();
+        biResponse.setGenChart(genChart);
+        biResponse.setGenResult(genResult);
+        biResponse.setChartId(chart.getId());
+        return ResultUtils.success(biResponse);
+    }
+
+
+
+
     /**
      * 根据 id 获取
      *
@@ -164,7 +245,7 @@ public class ChartController {
      */
     @PostMapping("/list/page/vo")
     public BaseResponse<Page<Chart>> listChartVOByPage(@RequestBody ChartQueryRequest chartQueryRequest,
-            HttpServletRequest request) {
+                                                       HttpServletRequest request) {
         long current = chartQueryRequest.getCurrent();
         long size = chartQueryRequest.getPageSize();
         // 限制爬虫
@@ -183,7 +264,7 @@ public class ChartController {
      */
     @PostMapping("/my/list/page/vo")
     public BaseResponse<Page<Chart>> listMyChartVOByPage(@RequestBody ChartQueryRequest chartQueryRequest,
-            HttpServletRequest request) {
+                                                         HttpServletRequest request) {
         if (chartQueryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -239,8 +320,9 @@ public class ChartController {
         if (chartQueryRequest == null) {
             return queryWrapper;
         }
-        Long id=chartQueryRequest.getId();
+        Long id = chartQueryRequest.getId();
         String goal = chartQueryRequest.getGoal();
+        String name = chartQueryRequest.getName();
         String chartData = chartQueryRequest.getChartData();
         String chartType = chartQueryRequest.getChartType();
         long userId = chartQueryRequest.getUserId();
@@ -250,12 +332,12 @@ public class ChartController {
         String sortOrder = chartQueryRequest.getSortOrder();
 
 
-
-        queryWrapper.eq(id>0,"id",id);
-        queryWrapper.eq(StringUtils.isNotBlank(goal),"goal",goal);
-        queryWrapper.eq(StringUtils.isNotBlank(chartType),"chartType",chartType);
-        queryWrapper.eq(ObjectUtils.isNotEmpty(userId),"userId",userId);
-        queryWrapper.eq("isDelete",false);
+        queryWrapper.eq(id > 0, "id", id);
+        queryWrapper.eq(StringUtils.isNotBlank(goal), "goal", goal);
+        queryWrapper.like(StringUtils.isNotBlank(name), "name", name);
+        queryWrapper.eq(StringUtils.isNotBlank(chartType), "chartType", chartType);
+        queryWrapper.eq(ObjectUtils.isNotEmpty(userId), "userId", userId);
+        queryWrapper.eq("isDelete", false);
 
         queryWrapper.orderBy(SqlUtils.validSortField(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC),
                 sortField);

@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.moksy.springbootinit.model.entity.Post;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 import com.moksy.springbootinit.model.entity.User;
 import org.junit.jupiter.api.Assertions;

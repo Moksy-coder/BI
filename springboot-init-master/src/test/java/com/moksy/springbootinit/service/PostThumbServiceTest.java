@@ -1,6 +1,6 @@
 package com.moksy.springbootinit.service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 import com.moksy.springbootinit.model.entity.User;
 import org.junit.jupiter.api.Assertions;
