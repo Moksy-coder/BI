@@ -1,5 +1,6 @@
 package com.moksy.springbootinit.controller;
 
+import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.moksy.springbootinit.annotation.AuthCheck;
@@ -12,6 +13,7 @@ import com.moksy.springbootinit.constant.UserConstant;
 import com.moksy.springbootinit.exception.BusinessException;
 import com.moksy.springbootinit.exception.ThrowUtils;
 import com.moksy.springbootinit.manager.AiManager;
+import com.moksy.springbootinit.manager.RedisLimiterManager;
 import com.moksy.springbootinit.model.dto.chart.*;
 import com.moksy.springbootinit.model.entity.Chart;
 import com.moksy.springbootinit.model.entity.User;
@@ -30,6 +32,9 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * 图表接口
  */
@@ -46,6 +51,9 @@ public class ChartController {
 
     @Resource
     private AiManager aiManager;
+
+    @Resource
+    private RedisLimiterManager redisLimiterManager;
 
     // region 增删改查
 
@@ -139,8 +147,33 @@ public class ChartController {
         ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
         // 如果名称不为空，并且名称长度大于100，就抛出异常，并给出提示
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+
+        //校验文件
+        //● 文件的大小
+        long size = multipartFile.getSize();
+        //● 文件的后缀
+        String originalFilename = multipartFile.getOriginalFilename();
+        //利用fileutils的工具类获取文件的后缀
+        String suffix = FileUtil.getSuffix(originalFilename);
+        //定义一些合法的后缀并进行判断
+        List<String> validFileSuffixList= Arrays.asList("xlxs","xls");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR,"文件非法后缀");
+        //设置文件的极限大小
+        final long ONE_MB=1024*1024L;
+        if(size>ONE_MB){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"文件大小超过1M");
+        }
+
+        //● 文件的内容（成本较高）
+
+        //● 文件的合规合法性
+
+
         // 通过response对象拿到用户id(必须登录才能使用)
         User loginUser = userService.getLoginUser(request);
+
+        //进行限流操作
+        redisLimiterManager.doRateLimit("genChartByAi"+loginUser.getId());
 
         // 指定一个模型id(把id写死，也可以定义成一个常量)
         long biModelId = 1659171950288818178L;

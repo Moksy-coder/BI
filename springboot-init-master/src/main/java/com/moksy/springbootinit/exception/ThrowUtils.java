@@ -5,8 +5,6 @@ import com.moksy.springbootinit.common.ErrorCode;
 /**
  * 抛异常工具类
  *
- * 
- * 
  */
 public class ThrowUtils {
 

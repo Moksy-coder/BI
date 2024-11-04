@@ -23,4 +23,8 @@
         id,goal,name,chartData,chartType,genChart,genResult,userId,
             createTime,updateTime,isDelete
     </sql>
+
+    <select id="queryChartData" parameterType="String" resultType="map" >
+        ${querySql}
+    </select>
 </mapper>
